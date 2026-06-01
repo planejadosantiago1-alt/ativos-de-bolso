@@ -1,0 +1,6 @@
+{
+  "name": "Ativos de Bolso Launch Dashboard",
+  "description": "CTO dashboard for Ativos de Bolso fintech app. Contains Go-To-Market launch videos and Android AI Architecture.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
