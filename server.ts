@@ -22,7 +22,39 @@ db.exec(`
   )
 `);
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS config (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  )
+`);
+
 // Endpoints da API
+app.get('/api/config', (req, res) => {
+  try {
+    const config = db.prepare('SELECT * FROM config').all();
+    const configMap = config.reduce((acc, curr) => ({ ...acc, [curr.key]: curr.value }), {});
+    res.json(configMap);
+  } catch (error) {
+    console.error('Erro ao buscar config:', error);
+    res.status(500).json({ error: 'Erro ao buscar config' });
+  }
+});
+
+app.post('/api/config', (req, res) => {
+  const { key, value } = req.body;
+  try {
+    const insertOrReplace = db.prepare(`
+      INSERT OR REPLACE INTO config (key, value)
+      VALUES (?, ?)
+    `);
+    insertOrReplace.run(key, value);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Erro ao salvar config:', error);
+    res.status(500).json({ error: 'Erro ao salvar config' });
+  }
+});
 app.get('/api/leads', (req, res) => {
   try {
     const leads = db.prepare('SELECT * FROM leads ORDER BY date DESC').all();
