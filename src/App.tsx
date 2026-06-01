@@ -29,6 +29,22 @@ export default function App() {
   const [viewMode, setViewMode] = useState<'landing' | 'admin'>('landing');
   const [leads, setLeads] = useState<Lead[]>([]);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [showAdminLogin, setShowAdminLogin] = useState(false);
+  const [adminPassword, setAdminPassword] = useState('');
+
+  // Fallback URL de vídeo fixo para evitar perda caso o banco SQLite reinicie no servidor (Render)
+  const [videoUrl, setVideoUrl] = useState<string>('https://drive.google.com/file/d/1m__QJVM1j7woYkX3y_5NdKmapAieYJ5u/view?usp=drive_link');
+  const [isAdminSaving, setIsAdminSaving] = useState(false);
+
+  // Carregar config (URL de vídeo) no início
+  useEffect(() => {
+    fetch('/api/config')
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.videoUrl) setVideoUrl(data.videoUrl);
+      })
+      .catch(err => console.error('Erro ao carregar configurações:', err));
+  }, []);
 
   // Carrega os leads sempre que abrir o painel de admin
   useEffect(() => {
@@ -48,6 +64,50 @@ export default function App() {
       setIsMuted(!isMuted);
     }
   };
+
+  const handleAdminAccess = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (adminPassword === 'admin123') {
+      setIsAuthenticated(true);
+      setShowAdminLogin(false);
+      setAdminPassword('');
+      setViewMode('admin');
+    } else {
+      alert("Senha incorreta!");
+    }
+  };
+
+  const saveVideoUrl = async (url: string) => {
+    setIsAdminSaving(true);
+    try {
+      await fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: 'videoUrl', value: url })
+      });
+      setVideoUrl(url);
+      alert('Link do vídeo salvo com sucesso!');
+    } catch (error) {
+      console.error('Erro ao salvar config', error);
+      alert('Erro ao salvar o link.');
+    } finally {
+      setIsAdminSaving(false);
+    }
+  };
+
+  const getDriveIframeUrl = (url: string) => {
+    if (!url) return null;
+    const driveRegex = /drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/;
+    const match = url.match(driveRegex);
+    if (match && match[1]) {
+      return `https://drive.google.com/file/d/${match[1]}/preview`;
+    }
+    return null;
+  };
+
+  const driveIframeUrl = videoUrl ? getDriveIframeUrl(videoUrl) : null;
+  const directVideoUrl = videoUrl || '/video.mp4';
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,16 +149,6 @@ export default function App() {
     }
   };
 
-  const handleAdminAccess = () => {
-    const password = window.prompt("Digite a senha de administrador (admin123) para ver os leads capturados:");
-    if (password === 'admin123') {
-      setIsAuthenticated(true);
-      setViewMode('admin');
-    } else if (password !== null) {
-      alert("Senha incorreta!");
-    }
-  };
-
   return (
     <div className="min-h-screen bg-[#050505] text-[#FFFFFF] font-sans flex flex-col relative overflow-hidden">
       
@@ -132,7 +182,7 @@ export default function App() {
             </button>
           ) : (
             <button 
-              onClick={handleAdminAccess}
+              onClick={() => setShowAdminLogin(true)}
               className={`text-xs uppercase tracking-widest font-bold flex items-center gap-2 transition-colors shrink-0 text-gray-400 hover:text-white`}
             >
               <Database className="w-4 h-4" />
@@ -141,6 +191,29 @@ export default function App() {
           )}
         </div>
       </header>
+
+      {/* Modal Admin Password */}
+      {showAdminLogin && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <form onSubmit={handleAdminAccess} className="bg-zinc-900 border border-emerald-500/30 p-8 rounded-2xl w-full max-w-md shadow-2xl relative">
+            <button type="button" onClick={() => setShowAdminLogin(false)} className="absolute top-4 right-4 text-gray-500 hover:text-white">✕</button>
+            <h3 className="text-xl font-bold text-white mb-2">Acesso Restrito</h3>
+            <p className="text-sm text-gray-400 mb-6">Digite a senha para ver os leads capturados.</p>
+            <input 
+              type="password" 
+              required
+              autoFocus
+              value={adminPassword}
+              onChange={(e) => setAdminPassword(e.target.value)}
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-gray-500 focus:outline-none focus:border-emerald-500/50 mb-4"
+              placeholder="Senha de acesso..."
+            />
+            <button type="submit" className="w-full bg-emerald-500 text-black font-bold uppercase tracking-widest text-xs py-3 rounded-xl hover:bg-emerald-400 transition-colors">
+              Acessar Painel
+            </button>
+          </form>
+        </div>
+      )}
 
       {/* Area Principal */}
       <main className="flex-1 flex items-center justify-center p-4 md:p-8 relative z-10 w-full mb-8">
@@ -157,22 +230,41 @@ export default function App() {
             {/* Lado Esquerdo: Estrutura do Vídeo Permanente */}
             <div className="flex flex-col items-center lg:items-end justify-center w-full">
               <div className="relative w-full max-w-[320px] aspect-[9/16] bg-black border-[6px] border-white/10 rounded-[2.5rem] overflow-hidden shadow-2xl shadow-emerald-900/20 glass group">
-                <video 
-                  ref={videoRef}
-                  src="/video.mp4" 
-                  autoPlay 
-                  loop 
-                  muted={isMuted} 
-                  playsInline
-                  className="absolute inset-0 w-full h-full object-cover"
-                  onError={(e) => {
-                    const target = e.target as HTMLVideoElement;
-                    target.style.display = 'none';
-                    if (target.nextElementSibling) {
-                      (target.nextElementSibling as HTMLElement).style.display = 'flex';
-                    }
-                  }}
-                />
+                {directVideoUrl ? (
+                  driveIframeUrl ? (
+                    <div className="absolute inset-0 w-full h-full bg-black pointer-events-auto">
+                      <iframe 
+                        src={driveIframeUrl} 
+                        className="w-full h-full border-0"
+                        allow="autoplay; fullscreen"
+                      />
+                    </div>
+                  ) : (
+                    <video 
+                      key={directVideoUrl}
+                      ref={videoRef}
+                      src={directVideoUrl} 
+                      autoPlay 
+                      loop 
+                      muted={isMuted} 
+                      playsInline
+                      className="absolute inset-0 w-full h-full object-cover"
+                      onError={(e) => {
+                        const target = e.target as HTMLVideoElement;
+                        target.style.display = 'none';
+                        if (target.nextElementSibling) {
+                          (target.nextElementSibling as HTMLElement).style.display = 'flex';
+                        }
+                      }}
+                    />
+                  )
+                ) : (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900 p-8 text-center border-2 border-dashed border-white/20">
+                    <FileVideo className="w-12 h-12 text-gray-500 mb-4" />
+                    <p className="text-sm font-bold text-gray-400">Vídeo não encontrado</p>
+                    <p className="text-xs text-gray-500 mt-2">Você precisa configurar um link de vídeo válido no Admin.</p>
+                  </div>
+                )}
                 
                 {/* Fallback caso falhe o carregamento */}
                 <div className="absolute inset-0 hidden flex-col items-center justify-center bg-zinc-900 p-8 text-center border-2 border-dashed border-white/20">
@@ -364,6 +456,32 @@ export default function App() {
                 <div>
                   <h2 className="text-3xl font-serif italic text-white mb-2">Painel de Administração</h2>
                   <p className="text-gray-400">Aqui ficam armazenados os dados de quem deseja acesso VIP.</p>
+                </div>
+              </div>
+
+              {/* Configurações do Site */}
+              <div className="glass border border-white/10 rounded-2xl overflow-hidden shadow-2xl p-6 mb-8">
+                <h3 className="text-xl font-bold text-emerald-400 mb-4 flex items-center gap-2">
+                  <FileVideo className="w-5 h-5" /> Configuração do Vídeo
+                </h3>
+                <p className="text-sm text-gray-400 mb-4">
+                  ⚠️ <strong>Atenção:</strong> Como os dados (como o arquivo do banco de dados SQLite) podem ser resetados em servidores gratuitos de hospedagem na nuvem, o aplicativo sempre iniciará com o último vídeo salvo via Google Drive como fallback até que isso seja migrado para um banco na nuvem.
+                </p>
+                <div className="flex gap-4 items-center">
+                  <input 
+                    type="url" 
+                    value={videoUrl}
+                    onChange={(e) => setVideoUrl(e.target.value)}
+                    placeholder="https://exemplo.com/caminho/do/video.mp4 ou Google Drive Link"
+                    className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-gray-500 focus:outline-none focus:border-emerald-500/50"
+                  />
+                  <button 
+                    onClick={() => saveVideoUrl(videoUrl)}
+                    disabled={isAdminSaving}
+                    className="bg-emerald-500 text-black font-bold px-6 py-3 rounded-xl hover:bg-emerald-400 transition-colors shrink-0 disabled:opacity-50"
+                  >
+                    {isAdminSaving ? 'Salvando...' : 'Salvar URL Manual'}
+                  </button>
                 </div>
               </div>
 
