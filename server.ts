@@ -3,7 +3,6 @@ import Database from 'better-sqlite3';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { createServer as createViteServer } from 'vite';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -68,9 +67,10 @@ app.delete('/api/leads', (req, res) => {
 
 // Middleware do Vite (Apenas para Desenvolvimento) e Arquivos Estáticos (Produção)
 async function startServer() {
-  const PORT = 3000;
+  const PORT = process.env.PORT || 3000;
 
   if (process.env.NODE_ENV !== "production") {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
