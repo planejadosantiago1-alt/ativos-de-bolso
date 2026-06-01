@@ -1,6 +1,16 @@
-import React, { useState, useRef } from 'react';
-import { Mail, Phone, CheckCircle2, UserPlus, FileVideo, MessageSquare, Volume2, VolumeX } from 'lucide-react';
-import { motion } from 'motion/react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Mail, Phone, CheckCircle2, UserPlus, FileVideo, MessageSquare, Volume2, VolumeX, Database, ArrowLeft } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+
+// Interface para os Leads
+interface Lead {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  message: string;
+  date: string;
+}
 
 export default function App() {
   // Estados do Formulário
@@ -14,6 +24,19 @@ export default function App() {
   // Estado para o Vídeo
   const [isMuted, setIsMuted] = useState(true);
   const videoRef = useRef<HTMLVideoElement>(null);
+  
+  // Estados para Administrador (Leads)
+  const [viewMode, setViewMode] = useState<'landing' | 'admin'>('landing');
+  const [leads, setLeads] = useState<Lead[]>([]);
+
+  useEffect(() => {
+    fetch('/api/leads')
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) setLeads(data);
+      })
+      .catch(err => console.error('Erro ao carregar leads:', err));
+  }, []);
 
   const toggleMute = () => {
     if (videoRef.current) {
@@ -28,8 +51,25 @@ export default function App() {
     
     setIsLoading(true);
 
-    // Simula o tempo de envio (já que é uma página estática sem backend)
-    setTimeout(() => {
+    const newLead: Lead = {
+      id: Math.random().toString(36).substr(2, 9),
+      name,
+      email,
+      phone,
+      message,
+      date: new Date().toLocaleString('pt-BR')
+    };
+
+    try {
+      const response = await fetch('/api/leads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newLead)
+      });
+      
+      const updatedLeads = await response.json();
+      setLeads(updatedLeads);
+      
       setIsSubmitted(true);
       setName('');
       setEmail('');
@@ -38,7 +78,11 @@ export default function App() {
       setIsLoading(false);
 
       setTimeout(() => setIsSubmitted(false), 4000);
-    }, 1500);
+    } catch (error) {
+      console.error('Falha ao salvar o Lead', error);
+      alert('Erro ao enviar cadastro. Tente novamente.');
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -49,7 +93,7 @@ export default function App() {
       <div className="absolute bottom-[-20%] right-[-10%] w-[60%] h-[60%] bg-indigo-900/20 rounded-full blur-[150px] pointer-events-none"></div>
 
       {/* Header Fixo */}
-      <header className="p-4 md:p-6 flex justify-center md:justify-start items-center relative z-20">
+      <header className="p-4 md:p-6 flex flex-col md:flex-row justify-between items-center relative z-20 gap-4">
         <div className="flex items-center gap-3 w-full justify-center lg:justify-start">
           <div className="relative group">
             <div className="absolute inset-0 bg-emerald-500 rounded-xl blur-md opacity-40 group-hover:opacity-60 transition-opacity"></div>
@@ -62,16 +106,30 @@ export default function App() {
             Ativos de Bolso
           </span>
         </div>
+        
+        <div className="flex gap-4 overflow-x-auto w-full md:w-auto pb-2 md:pb-0 scrollbar-hide justify-start md:justify-end">
+          <button 
+            onClick={() => setViewMode(viewMode === 'landing' ? 'admin' : 'landing')}
+            className={`text-xs uppercase tracking-widest font-bold flex items-center gap-2 transition-colors shrink-0 ${viewMode === 'admin' ? 'text-emerald-400' : 'text-gray-400 hover:text-white'}`}
+          >
+            {viewMode === 'admin' ? <ArrowLeft className="w-4 h-4" /> : <Database className="w-4 h-4" />}
+            <span>{viewMode === 'admin' ? 'Voltar' : 'Admin (Leads)'}</span>
+          </button>
+        </div>
       </header>
 
       {/* Area Principal */}
       <main className="flex-1 flex items-center justify-center p-4 md:p-8 relative z-10 w-full mb-8">
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="w-full flex-col flex items-center justify-center gap-16"
-        >
-          <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-2 gap-8 md:gap-16 items-center">
+        <AnimatePresence mode="wait">
+          {viewMode === 'landing' && (
+            <motion.div 
+              key="landing"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full flex-col flex items-center justify-center gap-16"
+            >
+              <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-2 gap-8 md:gap-16 items-center">
             {/* Lado Esquerdo: Estrutura do Vídeo Permanente */}
             <div className="flex flex-col items-center lg:items-end justify-center w-full">
               <div className="relative w-full max-w-[320px] aspect-[9/16] bg-black border-[6px] border-white/10 rounded-[2.5rem] overflow-hidden shadow-2xl shadow-emerald-900/20 glass group">
@@ -268,7 +326,113 @@ export default function App() {
             </div>
           </div>
 
-        </motion.div>
+            </motion.div>
+          )}
+
+          {viewMode === 'admin' && (
+            <motion.div 
+              key="admin"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="w-full max-w-5xl self-start mt-8"
+            >
+              <div className="mb-8 flex justify-between items-end flex-wrap gap-4">
+                <div>
+                  <h2 className="text-3xl font-serif italic text-white mb-2">Painel de Leads</h2>
+                  <p className="text-gray-400">Dados capturados através da página (salvos localmente no seu navegador).</p>
+                </div>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => {
+                      if (leads.length === 0) {
+                        alert('Nenhum dado para exportar.');
+                        return;
+                      }
+                      const headers = ['Data', 'Nome', 'E-mail', 'WhatsApp', 'Mensagem'];
+                      const csvContent = [
+                        headers.join(','),
+                        ...leads.map(lead => [
+                          `"${lead.date}"`,
+                          `"${lead.name}"`,
+                          `"${lead.email}"`,
+                          `"${lead.phone}"`,
+                          `"${lead.message.replace(/\n/g, ' ')}"`
+                        ].join(','))
+                      ].join('\n');
+                      
+                      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                      const url = URL.createObjectURL(blob);
+                      const link = document.createElement('a');
+                      link.setAttribute('href', url);
+                      link.setAttribute('download', 'leads_ativos_de_bolso.csv');
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                    }}
+                    className="text-xs text-white hover:text-emerald-300 transition-colors uppercase tracking-widest font-bold px-4 py-2 border border-emerald-500/50 rounded-md bg-emerald-500/20 hover:bg-emerald-500/30"
+                  >
+                    Exportar Planilha (CSV)
+                  </button>
+                  <button 
+                    onClick={async () => {
+                      if (window.confirm('Tem certeza que deseja apagar todos os leads?')) {
+                        try {
+                          await fetch('/api/leads', { method: 'DELETE' });
+                          setLeads([]);
+                        } catch (error) {
+                          console.error('Erro ao deletar leads', error);
+                        }
+                      }
+                    }}
+                    className="text-xs text-red-400 hover:text-red-300 transition-colors uppercase tracking-widest font-bold px-4 py-2 border border-red-500/20 rounded-md bg-red-500/10 hover:bg-red-500/20"
+                  >
+                    Limpar Dados
+                  </button>
+                </div>
+              </div>
+
+              <div className="glass border border-white/10 rounded-2xl overflow-hidden shadow-2xl">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm text-gray-300">
+                    <thead className="bg-white/5 text-xs uppercase bg-emerald-500/10 border-b border-white/10">
+                      <tr>
+                        <th className="px-6 py-4 font-bold tracking-widest text-emerald-400">Data</th>
+                        <th className="px-6 py-4 font-bold tracking-widest text-emerald-400">Nome</th>
+                        <th className="px-6 py-4 font-bold tracking-widest text-emerald-400">E-mail</th>
+                        <th className="px-6 py-4 font-bold tracking-widest text-emerald-400">WhatsApp</th>
+                        <th className="px-6 py-4 font-bold tracking-widest text-emerald-400">Mensagem</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {leads.length > 0 ? (
+                        leads.map((lead) => (
+                          <tr key={lead.id} className="hover:bg-white/5 transition-colors">
+                            <td className="px-6 py-4 whitespace-nowrap">{lead.date}</td>
+                            <td className="px-6 py-4 font-medium text-white">{lead.name || 'Não informado'}</td>
+                            <td className="px-6 py-4">{lead.email}</td>
+                            <td className="px-6 py-4">{lead.phone}</td>
+                            <td className="px-6 py-4 max-w-[200px] truncate" title={lead.message}>
+                              {lead.message || <span className="text-gray-600 italic">Sem mensagem</span>}
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
+                            <Database className="w-8 h-8 text-white/20 mx-auto mb-3" />
+                            Nenhum lead capturado ainda. Preencha o formulário para testar.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+        </AnimatePresence>
       </main>
     </div>
   );
