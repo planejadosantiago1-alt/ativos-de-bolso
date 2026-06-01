@@ -26,28 +26,41 @@ export default function App() {
   const videoRef = useRef<HTMLVideoElement>(null);
   
   // Estados para Administrador (Leads e Config)
-  const [viewMode, setViewMode] = useState<'landing' | 'admin'>('landing');
+  const [viewMode, setViewMode] = useState<'landing' | 'admin'>(
+    window.location.hash === '#admin' ? 'admin' : 'landing'
+  );
   const [leads, setLeads] = useState<Lead[]>([]);
   const [videoUrl, setVideoUrl] = useState<string>('');
   const [isAdminSaving, setIsAdminSaving] = useState(false);
 
   useEffect(() => {
-    // Carregar Leads
-    fetch('/api/leads')
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data)) setLeads(data);
-      })
-      .catch(err => console.error('Erro ao carregar leads:', err));
-
-    // Carregar Configurações (ex: URL do vídeo)
+    const handleHashChange = () => {
+      setViewMode(window.location.hash === '#admin' ? 'admin' : 'landing');
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    
+    // Carregar configurações sempre
     fetch('/api/config')
       .then(res => res.json())
       .then(data => {
         if (data && data.videoUrl) setVideoUrl(data.videoUrl);
       })
       .catch(err => console.error('Erro ao carregar configurações:', err));
+      
+    return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
+
+  // Carrega os leads sempre que abrir o painel de admin
+  useEffect(() => {
+    if (viewMode === 'admin') {
+      fetch('/api/leads')
+        .then(res => res.json())
+        .then(data => {
+          if (Array.isArray(data)) setLeads(data);
+        })
+        .catch(err => console.error('Erro ao carregar leads:', err));
+    }
+  }, [viewMode]);
 
   const saveVideoUrl = async (url: string) => {
     setIsAdminSaving(true);
@@ -115,15 +128,18 @@ export default function App() {
   };
 
   const getDriveIframeUrl = (url: string) => {
+    if (!url) return null;
     const driveRegex = /drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/;
     const match = url.match(driveRegex);
     if (match && match[1]) {
+      // Usar uma URL otimizada para streaming
       return `https://drive.google.com/file/d/${match[1]}/preview`;
     }
     return null;
   };
 
   const driveIframeUrl = videoUrl ? getDriveIframeUrl(videoUrl) : null;
+  const directVideoUrl = videoUrl || '/video.mp4';
 
   return (
     <div className="min-h-screen bg-[#050505] text-[#FFFFFF] font-sans flex flex-col relative overflow-hidden">
@@ -148,13 +164,15 @@ export default function App() {
         </div>
         
         <div className="flex gap-4 overflow-x-auto w-full md:w-auto pb-2 md:pb-0 scrollbar-hide justify-start md:justify-end">
-          <button 
-            onClick={() => setViewMode(viewMode === 'landing' ? 'admin' : 'landing')}
-            className={`text-xs uppercase tracking-widest font-bold flex items-center gap-2 transition-colors shrink-0 ${viewMode === 'admin' ? 'text-emerald-400' : 'text-gray-400 hover:text-white'}`}
-          >
-            {viewMode === 'admin' ? <ArrowLeft className="w-4 h-4" /> : <Database className="w-4 h-4" />}
-            <span>{viewMode === 'admin' ? 'Voltar' : 'Admin (Leads)'}</span>
-          </button>
+          {viewMode === 'admin' && (
+            <button 
+              onClick={() => window.location.hash = ''}
+              className={`text-xs uppercase tracking-widest font-bold flex items-center gap-2 transition-colors shrink-0 text-emerald-400`}
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Voltar para Site</span>
+            </button>
+          )}
         </div>
       </header>
 
@@ -173,18 +191,20 @@ export default function App() {
             {/* Lado Esquerdo: Estrutura do Vídeo Permanente */}
             <div className="flex flex-col items-center lg:items-end justify-center w-full">
               <div className="relative w-full max-w-[320px] aspect-[9/16] bg-black border-[6px] border-white/10 rounded-[2.5rem] overflow-hidden shadow-2xl shadow-emerald-900/20 glass group">
-                {videoUrl ? (
+                {directVideoUrl ? (
                   driveIframeUrl ? (
-                    <iframe 
-                      src={driveIframeUrl} 
-                      className="absolute inset-0 w-full h-full border-0 bg-black"
-                      allow="autoplay; fullscreen"
-                    />
+                    <div className="absolute inset-0 w-full h-full bg-black pointer-events-auto">
+                      <iframe 
+                        src={driveIframeUrl} 
+                        className="w-full h-full border-0"
+                        allow="autoplay; fullscreen"
+                      />
+                    </div>
                   ) : (
                     <video 
-                      key={videoUrl}
+                      key={directVideoUrl}
                       ref={videoRef}
-                      src={videoUrl} 
+                      src={directVideoUrl} 
                       autoPlay 
                       loop 
                       muted={isMuted} 
@@ -203,7 +223,8 @@ export default function App() {
                   <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900 p-8 text-center border-2 border-dashed border-white/20">
                     <FileVideo className="w-12 h-12 text-gray-500 mb-4" />
                     <p className="text-sm font-bold text-gray-400">Nenhum vídeo configurado</p>
-                    <p className="text-xs text-gray-500 mt-2">Acesse "Admin" acima e configure o link do seu vídeo para exibi-lo aqui.</p>
+                    <p className="text-xs text-gray-500 mt-2">Você deletou o arquivo do sistema.</p>
+                    <p className="text-xs text-emerald-400 mt-4 font-bold">Por favor, anexe o arquivo de vídeo (.mp4) novamente aqui no chat para a Inteligência Artificial!</p>
                   </div>
                 )}
                 
@@ -406,7 +427,7 @@ export default function App() {
                   <FileVideo className="w-5 h-5" /> Configuração do Vídeo
                 </h3>
                 <p className="text-sm text-gray-400 mb-4">
-                  Como os arquivos de vídeo (.mp4) são grandes, é recomendado hospedar seu vídeo em algum lugar (Google Drive aberto, Imgur, site próprio) e colar o <strong>Link Direto do MP4</strong> abaixo. Assim, todos os visitantes verão o vídeo corretamente.
+                  ⚠️ <strong>Atenção:</strong> Links do Google Drive geralmente bloqueiam a reprodução automática. Para o vídeo funcionar perfeitamente no fundo (reproduzindo sozinho), é recomendado <strong>enviar o arquivo de vídeo diretamente aqui no chat para a IA</strong> ou usar um link direto de arquivo <code>.mp4</code>.
                 </p>
                 <div className="flex gap-4 items-center">
                   <input 
@@ -421,7 +442,7 @@ export default function App() {
                     disabled={isAdminSaving}
                     className="bg-emerald-500 text-black font-bold px-6 py-3 rounded-xl hover:bg-emerald-400 transition-colors shrink-0 disabled:opacity-50"
                   >
-                    {isAdminSaving ? 'Salvando...' : 'Salvar Vídeo'}
+                    {isAdminSaving ? 'Salvando...' : 'Salvar URL Manual'}
                   </button>
                 </div>
               </div>
