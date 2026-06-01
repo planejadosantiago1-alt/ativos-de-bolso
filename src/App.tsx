@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Mail, Phone, CheckCircle2, UserPlus, FileVideo, MessageSquare } from 'lucide-react';
+import { Mail, Phone, CheckCircle2, UserPlus, FileVideo, MessageSquare, Volume2, VolumeX } from 'lucide-react';
 import { motion } from 'motion/react';
 
 export default function App() {
@@ -11,16 +11,14 @@ export default function App() {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   
-  // Estado para o Vídeo do Canva (MP4)
-  const [customVideo, setCustomVideo] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  // Estado para o Vídeo
+  const [isMuted, setIsMuted] = useState(true);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
-  // Lida com o upload do vídeo do Canva
-  const handleVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file && file.type.startsWith('video/')) {
-      const url = URL.createObjectURL(file);
-      setCustomVideo(url);
+  const toggleMute = () => {
+    if (videoRef.current) {
+      videoRef.current.muted = !isMuted;
+      setIsMuted(!isMuted);
     }
   };
 
@@ -74,44 +72,51 @@ export default function App() {
           className="w-full flex-col flex items-center justify-center gap-16"
         >
           <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-2 gap-8 md:gap-16 items-center">
-            {/* Lado Esquerdo: Estrutura do Vídeo do Canva */}
+            {/* Lado Esquerdo: Estrutura do Vídeo Permanente */}
             <div className="flex flex-col items-center lg:items-end justify-center w-full">
-              <input 
-                type="file" 
-                ref={fileInputRef} 
-                onChange={handleVideoUpload} 
-                accept="video/mp4,video/x-m4v,video/*" 
-                className="hidden" 
-              />
-
               <div className="relative w-full max-w-[320px] aspect-[9/16] bg-black border-[6px] border-white/10 rounded-[2.5rem] overflow-hidden shadow-2xl shadow-emerald-900/20 glass group">
-                {customVideo ? (
-                  <video 
-                    src={customVideo} 
-                    autoPlay 
-                    loop 
-                    muted 
-                    playsInline
-                    className="absolute inset-0 w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-zinc-900 to-black p-8 text-center cursor-pointer hover:bg-zinc-800 transition-colors"
-                       onClick={() => fileInputRef.current?.click()}>
-                    <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mb-6">
-                      <FileVideo className="w-8 h-8 text-emerald-400" />
-                    </div>
-                    <h3 className="text-xl font-bold text-white mb-2">Seu Vídeo (Canva)</h3>
-                    <p className="text-xs text-gray-400 mb-6">Clique aqui para subir o vídeo que você exportou em MP4 (Formato Reels/TikTok 9:16).</p>
-                  </div>
-                )}
+                {/* O vídeo será carregado de /video.mp4 dentro da pasta public */}
+                <video 
+                  ref={videoRef}
+                  src="/video.mp4" 
+                  autoPlay 
+                  loop 
+                  muted={isMuted} 
+                  playsInline
+                  className="absolute inset-0 w-full h-full object-cover"
+                  onError={(e) => {
+                    const target = e.target as HTMLVideoElement;
+                    target.style.display = 'none';
+                    if (target.nextElementSibling) {
+                      (target.nextElementSibling as HTMLElement).style.display = 'flex';
+                    }
+                  }}
+                />
+                
+                {/* Fallback se o vídeo ainda não foi enviado */}
+                <div className="absolute inset-0 hidden flex-col items-center justify-center bg-zinc-900 p-8 text-center border-2 border-dashed border-white/20">
+                  <FileVideo className="w-12 h-12 text-gray-500 mb-4" />
+                  <p className="text-sm font-bold text-gray-400">Vídeo não encontrado</p>
+                  <p className="text-xs text-gray-500 mt-2">Você precisa enviar o arquivo com nome exato "video.mp4" aqui no chat para a pasta public.</p>
+                </div>
 
-                {customVideo && (
-                  <div 
-                    className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex justify-center cursor-pointer"
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    <span className="text-[10px] text-white bg-black/50 px-3 py-1.5 rounded-full uppercase tracking-widest font-bold backdrop-blur-md border border-white/10">
-                      Trocar Vídeo
+                {/* Botão de Áudio */}
+                <button 
+                  onClick={toggleMute}
+                  className="absolute bottom-6 right-6 w-12 h-12 bg-black/60 hover:bg-emerald-500/80 backdrop-blur-md border border-white/20 rounded-full flex items-center justify-center shadow-lg transition-all z-20 group-hover:scale-110"
+                >
+                  {isMuted ? (
+                    <VolumeX className="w-5 h-5 text-white" />
+                  ) : (
+                    <Volume2 className="w-5 h-5 text-white animate-pulse" />
+                  )}
+                </button>
+                
+                {isMuted && (
+                  <div className="absolute top-6 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-md px-4 py-2 rounded-full border border-white/10 flex items-center gap-2 pointer-events-none z-20">
+                    <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+                    <span className="text-[10px] text-white font-bold uppercase tracking-widest whitespace-nowrap">
+                      Toque para ouvir
                     </span>
                   </div>
                 )}
