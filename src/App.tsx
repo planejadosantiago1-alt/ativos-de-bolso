@@ -25,30 +25,10 @@ export default function App() {
   const [isMuted, setIsMuted] = useState(true);
   const videoRef = useRef<HTMLVideoElement>(null);
   
-  // Estados para Administrador (Leads e Config)
-  const [viewMode, setViewMode] = useState<'landing' | 'admin'>(
-    window.location.hash === '#admin' ? 'admin' : 'landing'
-  );
+  // Estados para Administrador (Leads)
+  const [viewMode, setViewMode] = useState<'landing' | 'admin'>('landing');
   const [leads, setLeads] = useState<Lead[]>([]);
-  const [videoUrl, setVideoUrl] = useState<string>('');
-  const [isAdminSaving, setIsAdminSaving] = useState(false);
-
-  useEffect(() => {
-    const handleHashChange = () => {
-      setViewMode(window.location.hash === '#admin' ? 'admin' : 'landing');
-    };
-    window.addEventListener('hashchange', handleHashChange);
-    
-    // Carregar configurações sempre
-    fetch('/api/config')
-      .then(res => res.json())
-      .then(data => {
-        if (data && data.videoUrl) setVideoUrl(data.videoUrl);
-      })
-      .catch(err => console.error('Erro ao carregar configurações:', err));
-      
-    return () => window.removeEventListener('hashchange', handleHashChange);
-  }, []);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   // Carrega os leads sempre que abrir o painel de admin
   useEffect(() => {
@@ -61,24 +41,6 @@ export default function App() {
         .catch(err => console.error('Erro ao carregar leads:', err));
     }
   }, [viewMode]);
-
-  const saveVideoUrl = async (url: string) => {
-    setIsAdminSaving(true);
-    try {
-      await fetch('/api/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: 'videoUrl', value: url })
-      });
-      setVideoUrl(url);
-      alert('Link do vídeo salvo com sucesso! O vídeo já está visível para os clientes.');
-    } catch (error) {
-      console.error('Erro ao salvar config', error);
-      alert('Erro ao salvar o link.');
-    } finally {
-      setIsAdminSaving(false);
-    }
-  };
 
   const toggleMute = () => {
     if (videoRef.current) {
@@ -127,19 +89,15 @@ export default function App() {
     }
   };
 
-  const getDriveIframeUrl = (url: string) => {
-    if (!url) return null;
-    const driveRegex = /drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/;
-    const match = url.match(driveRegex);
-    if (match && match[1]) {
-      // Usar uma URL otimizada para streaming
-      return `https://drive.google.com/file/d/${match[1]}/preview`;
+  const handleAdminAccess = () => {
+    const password = window.prompt("Digite a senha de administrador (admin123) para ver os leads capturados:");
+    if (password === 'admin123') {
+      setIsAuthenticated(true);
+      setViewMode('admin');
+    } else if (password !== null) {
+      alert("Senha incorreta!");
     }
-    return null;
   };
-
-  const driveIframeUrl = videoUrl ? getDriveIframeUrl(videoUrl) : null;
-  const directVideoUrl = videoUrl || '/video.mp4';
 
   return (
     <div className="min-h-screen bg-[#050505] text-[#FFFFFF] font-sans flex flex-col relative overflow-hidden">
@@ -164,13 +122,21 @@ export default function App() {
         </div>
         
         <div className="flex gap-4 overflow-x-auto w-full md:w-auto pb-2 md:pb-0 scrollbar-hide justify-start md:justify-end">
-          {viewMode === 'admin' && (
+          {viewMode === 'admin' ? (
             <button 
-              onClick={() => window.location.hash = ''}
-              className={`text-xs uppercase tracking-widest font-bold flex items-center gap-2 transition-colors shrink-0 text-emerald-400`}
+              onClick={() => setViewMode('landing')}
+              className={`text-xs uppercase tracking-widest font-bold flex items-center gap-2 transition-colors shrink-0 text-emerald-400 hover:text-emerald-300`}
             >
               <ArrowLeft className="w-4 h-4" />
               <span>Voltar para Site</span>
+            </button>
+          ) : (
+            <button 
+              onClick={handleAdminAccess}
+              className={`text-xs uppercase tracking-widest font-bold flex items-center gap-2 transition-colors shrink-0 text-gray-400 hover:text-white`}
+            >
+              <Database className="w-4 h-4" />
+              <span>Admin</span>
             </button>
           )}
         </div>
@@ -191,48 +157,28 @@ export default function App() {
             {/* Lado Esquerdo: Estrutura do Vídeo Permanente */}
             <div className="flex flex-col items-center lg:items-end justify-center w-full">
               <div className="relative w-full max-w-[320px] aspect-[9/16] bg-black border-[6px] border-white/10 rounded-[2.5rem] overflow-hidden shadow-2xl shadow-emerald-900/20 glass group">
-                {directVideoUrl ? (
-                  driveIframeUrl ? (
-                    <div className="absolute inset-0 w-full h-full bg-black pointer-events-auto">
-                      <iframe 
-                        src={driveIframeUrl} 
-                        className="w-full h-full border-0"
-                        allow="autoplay; fullscreen"
-                      />
-                    </div>
-                  ) : (
-                    <video 
-                      key={directVideoUrl}
-                      ref={videoRef}
-                      src={directVideoUrl} 
-                      autoPlay 
-                      loop 
-                      muted={isMuted} 
-                      playsInline
-                      className="absolute inset-0 w-full h-full object-cover"
-                      onError={(e) => {
-                        const target = e.target as HTMLVideoElement;
-                        target.style.display = 'none';
-                        if (target.nextElementSibling) {
-                          (target.nextElementSibling as HTMLElement).style.display = 'flex';
-                        }
-                      }}
-                    />
-                  )
-                ) : (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900 p-8 text-center border-2 border-dashed border-white/20">
-                    <FileVideo className="w-12 h-12 text-gray-500 mb-4" />
-                    <p className="text-sm font-bold text-gray-400">Nenhum vídeo configurado</p>
-                    <p className="text-xs text-gray-500 mt-2">Você deletou o arquivo do sistema.</p>
-                    <p className="text-xs text-emerald-400 mt-4 font-bold">Por favor, anexe o arquivo de vídeo (.mp4) novamente aqui no chat para a Inteligência Artificial!</p>
-                  </div>
-                )}
+                <video 
+                  ref={videoRef}
+                  src="/video.mp4" 
+                  autoPlay 
+                  loop 
+                  muted={isMuted} 
+                  playsInline
+                  className="absolute inset-0 w-full h-full object-cover"
+                  onError={(e) => {
+                    const target = e.target as HTMLVideoElement;
+                    target.style.display = 'none';
+                    if (target.nextElementSibling) {
+                      (target.nextElementSibling as HTMLElement).style.display = 'flex';
+                    }
+                  }}
+                />
                 
                 {/* Fallback caso falhe o carregamento */}
                 <div className="absolute inset-0 hidden flex-col items-center justify-center bg-zinc-900 p-8 text-center border-2 border-dashed border-white/20">
                   <FileVideo className="w-12 h-12 text-gray-500 mb-4" />
-                  <p className="text-sm font-bold text-gray-400">Erro ao carregar vídeo</p>
-                  <p className="text-xs text-gray-500 mt-2">O link informado no painel Admin pode estar incorreto ou o vídeo é privado.</p>
+                  <p className="text-sm font-bold text-gray-400">Vídeo não encontrado</p>
+                  <p className="text-xs text-gray-500 mt-2">Você precisa enviar o arquivo com nome exato "video.mp4" aqui no chat para a pasta public.</p>
                 </div>
 
                 {/* Botão de Áudio */}
@@ -417,33 +363,7 @@ export default function App() {
               <div className="mb-8 flex justify-between items-end flex-wrap gap-4">
                 <div>
                   <h2 className="text-3xl font-serif italic text-white mb-2">Painel de Administração</h2>
-                  <p className="text-gray-400">Gerencie seus leads e as configurações da Landing Page.</p>
-                </div>
-              </div>
-
-              {/* Configurações do Site */}
-              <div className="glass border border-white/10 rounded-2xl overflow-hidden shadow-2xl p-6 mb-8">
-                <h3 className="text-xl font-bold text-emerald-400 mb-4 flex items-center gap-2">
-                  <FileVideo className="w-5 h-5" /> Configuração do Vídeo
-                </h3>
-                <p className="text-sm text-gray-400 mb-4">
-                  ⚠️ <strong>Atenção:</strong> Links do Google Drive geralmente bloqueiam a reprodução automática. Para o vídeo funcionar perfeitamente no fundo (reproduzindo sozinho), é recomendado <strong>enviar o arquivo de vídeo diretamente aqui no chat para a IA</strong> ou usar um link direto de arquivo <code>.mp4</code>.
-                </p>
-                <div className="flex gap-4 items-center">
-                  <input 
-                    type="url" 
-                    value={videoUrl}
-                    onChange={(e) => setVideoUrl(e.target.value)}
-                    placeholder="https://exemplo.com/caminho/do/video.mp4"
-                    className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-gray-500 focus:outline-none focus:border-emerald-500/50"
-                  />
-                  <button 
-                    onClick={() => saveVideoUrl(videoUrl)}
-                    disabled={isAdminSaving}
-                    className="bg-emerald-500 text-black font-bold px-6 py-3 rounded-xl hover:bg-emerald-400 transition-colors shrink-0 disabled:opacity-50"
-                  >
-                    {isAdminSaving ? 'Salvando...' : 'Salvar URL Manual'}
-                  </button>
+                  <p className="text-gray-400">Aqui ficam armazenados os dados de quem deseja acesso VIP.</p>
                 </div>
               </div>
 
